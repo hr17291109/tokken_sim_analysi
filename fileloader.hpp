@@ -376,3 +376,82 @@ void load_halo(std::string FileBase, std::vector<float>&px, std::vector<float>&p
 	std::cerr << "Loading halo positions and velocities done. " << nhalo << " halos read." << std::endl;
 }
 
+void load_halo(std::string FileBase, std::vector<float>&px, std::vector<float>&py, std::vector<float>&pz, std::vector<float>&vx, std::vector<float>&vy, std::vector<float>&vz, std::vector<float>&vmax){
+	std::ifstream fin;
+	std::string buf;
+	int nfiles(0);
+	size_t nhalo(0);
+
+	while(1){
+		buf = FileBase + "_vmax."+ itos(nfiles);
+		if (!fexists(buf)) break;
+		nfiles++;
+		nhalo += get_fs(buf)/sizeof(float);
+	}
+	std::cout << nhalo << " halos stored in " << nfiles << " files." << std::endl;
+
+	px.resize(nhalo);
+	py.resize(nhalo);
+	pz.resize(nhalo);
+	vx.resize(nhalo);
+	vy.resize(nhalo);
+	vz.resize(nhalo);
+	vmax.resize(nhalo);
+
+	size_t fsize(0);
+	size_t nhalo_tmp(0);
+	size_t nhalo_cum(0);
+
+	std::vector<float> farray;
+	farray.resize(4*nhalo*3/nfiles);
+
+	for(auto i=0;i<nfiles;i++){
+		buf = FileBase + "_pos."+ itos(i);
+		fsize = get_fs(buf);
+		nhalo_tmp = fsize/sizeof(float)/3;
+		fin.open(buf.c_str());
+		fin.read((char *)&farray[0],fsize);
+		fin.close();
+		for(auto j=0;j<nhalo_tmp;j++){
+			px[nhalo_cum+j] = farray[3*j  ];
+			py[nhalo_cum+j] = farray[3*j+1];
+			pz[nhalo_cum+j] = farray[3*j+2];
+		}
+		nhalo_cum += nhalo_tmp;
+	}
+	assert(nhalo_cum == nhalo);
+	nhalo_cum = 0;
+	for(auto i=0;i<nfiles;i++){
+		buf = FileBase + "_bulkvel."+ itos(i);
+		fsize = get_fs(buf);
+		nhalo_tmp = fsize/sizeof(float)/3;
+		fin.open(buf.c_str());
+		fin.read((char *)&farray[0],fsize);
+		fin.close();
+		for(auto j=0;j<nhalo_tmp;j++){
+			vx[nhalo_cum+j] = farray[3*j  ];
+			vy[nhalo_cum+j] = farray[3*j+1];
+			vz[nhalo_cum+j] = farray[3*j+2];
+		}
+		nhalo_cum += nhalo_tmp;
+	}
+	assert(nhalo_cum == nhalo);
+	nhalo_cum = 0;
+	for(auto i=0;i<nfiles;i++){
+		buf = FileBase + "_vmax."+ itos(i);
+		fsize = get_fs(buf);
+		nhalo_tmp = fsize/sizeof(float);
+		fin.open(buf.c_str());
+		fin.read((char *)&farray[0],fsize);
+		fin.close();
+		for(auto j=0;j<nhalo_tmp;j++){
+			vmax[nhalo_cum+j] = farray[j];
+		}
+		nhalo_cum += nhalo_tmp;
+	}
+	assert(nhalo_cum == nhalo);
+
+	std::cerr << "Loading halo positions, velocities and maximum circular velocities done. " << nhalo << " halos read." << std::endl;
+	
+}
+

@@ -2,3 +2,4 @@
 const double kmin = 0.;
 const double kmax = 0.4;
 const int nbins = 400;
+const bool logbin = false;
