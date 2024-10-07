@@ -78,6 +78,7 @@ private:
 	void assignment_nonorm(std::vector<myhosthalo_str> &,double,bool,bool);
 	void assignment_nonorm(std::vector<myhosthalo_str> &,double,double,bool,bool);
 	void assignment(std::vector<myhosthalo_str> &,bool,bool);
+	void assignment(std::vector<myhosthalo_str> &,bool,bool,double,int); // for redshift space
 	void average2fields(FieldData&, FieldData&);
 	void adjust_grid(void);
 	void apply_filter(float,std::string);
@@ -677,6 +678,120 @@ void FieldData::assignment(std::vector<myhosthalo_str> &D,bool CIC,bool interlac
 	std::cerr << " done." << std::endl;
 	ngal = P_tot;
 }
+
+void FieldData::assignment(std::vector<myhosthalo_str> &D,bool CIC,bool interlace, double sfac, int los_dir){ // dir: line-of-sight direction (0: x, 1: y, 2: z)
+
+	if(CIC){
+		std::cerr << "start CIC density assignment of " << D.size() << " points to a ("
+		<< nx << "," << ny << "," << nz << ") grid points in redshift space" << std::endl;
+	}else{
+		std::cerr << "start NGP density assignment of " << D.size() << " points to a ("
+		<< nx << "," << ny << "," << nz << ") grid points in redshift space" << std::endl;
+	}
+	double P_tot(0);
+
+	#pragma omp parallel
+	{
+		int ntasks = omp_get_num_threads();
+		int thistask = omp_get_thread_num();
+		int i1, i2, i3;
+		int i1p, i2p, i3p;
+		float u, v, w;
+		#pragma omp for schedule(guided)
+		for(int n=0;n<D.size();n++){
+			if(CIC){
+				if(los_dir==0){
+	                u = (nx*(D[n].pos[0]+sfac*D[n].vel[0]))/Lx;
+					v = (ny*D[n].pos[1])/Ly;
+					w = (nz*D[n].pos[2])/Lz;
+				}else if(los_dir==1){
+					u = (nx*D[n].pos[0])/Lx;
+					v = (ny*(D[n].pos[1]+sfac*D[n].vel[1]))/Ly;
+					w = (nz*D[n].pos[2])/Lz;
+				}else if(los_dir==2){
+					u = (nx*D[n].pos[0])/Lx;
+					v = (ny*D[n].pos[1])/Ly;
+					w = (nz*(D[n].pos[2]+sfac*D[n].vel[2]))/Lz;
+				}else{
+					std::cerr << "Invalid los direction!!" << std::endl;
+				}
+			}else{ // FOR NGP
+				if(los_dir==0){
+					u = (nx*(D[n].pos[0]+sfac*D[n].vel[0]))/Lx+0.5;
+					v = (ny*D[n].pos[1])/Ly+0.5;
+					w = (nz*D[n].pos[2])/Lz+0.5;
+				}else if(los_dir==1){
+					u = (nx*D[n].pos[0])/Lx+0.5;
+					v = (ny*(D[n].pos[1]+sfac*D[n].vel[1]))/Ly+0.5;
+					w = (nz*D[n].pos[2])/Lz+0.5;
+				}else if(los_dir==2){
+					u = (nx*D[n].pos[0])/Lx+0.5;
+					v = (ny*D[n].pos[1])/Lz+0.5;
+					w = (nz*(D[n].pos[2]+sfac*D[n].vel[2]))/Lz+0.5;
+				}else{
+					std::cerr << "Invalid los direction!!" << std::endl;
+				}
+			}
+			if(interlace){
+				u += 0.5;
+				v += 0.5;
+				w += 0.5;
+			}
+			i1 = floor(u);
+			i2 = floor(v);
+			i3 = floor(w);
+
+			if(interlace){
+				i1 -= 1;
+				i2 -= 1;
+				i3 -= 1;
+			}
+			while(i1 >= (int)nx) i1 -= (int)nx;
+			while(i2 >= (int)ny) i2 -= (int)ny;
+			while(i3 >= (int)nz) i3 -= (int)nz;
+			while(i1 < 0) i1 += (int)nx;
+			while(i2 < 0) i2 += (int)ny;
+			while(i3 < 0) i3 += (int)nz;
+
+			if(!CIC){
+				this->add_data( i1,  i2,  i3, 1.);
+			}else{
+				u -= i1;
+				v -= i2;
+				w -= i3;
+
+				i1p = i1 + 1;
+				i2p = i2 + 1;
+				i3p = i3 + 1;
+
+				if(i1p >= (int)nx) i1p -= (int)nx;
+				if(i2p >= (int)ny) i2p -= (int)ny;
+				if(i3p >= (int)nz) i3p -= (int)nz;
+
+				this->add_data( i1,  i2,  i3, (1.-u)*(1.-v)*(1.-w));
+				this->add_data( i1,  i2, i3p, (1.-u)*(1.-v)*(w)   );
+				this->add_data( i1, i2p,  i3, (1.-u)*(v)   *(1.-w));
+				this->add_data( i1, i2p, i3p, (1.-u)*(v)   *(w)   );
+				this->add_data(i1p,  i2,  i3, (u)   *(1.-v)*(1.-w));
+				this->add_data(i1p,  i2, i3p, (u)   *(1.-v)*(w)   );
+				this->add_data(i1p, i2p,  i3, (u)   *(v)   *(1.-w));
+				this->add_data(i1p, i2p, i3p, (u)   *(v)   *(w)   );
+			}
+			#pragma omp atomic
+			P_tot += 1.;
+		}
+	}
+
+	double Pmean(P_tot/(double)(nx*ny*nz));
+	std::cerr << " (mean # of points per mesh: " << Pmean << ")";
+	double inv_Pmean(1./Pmean);
+	this->multiply_data_all((float)inv_Pmean);
+	this->subtract_data_all(1.);
+	std::cerr << " done." << std::endl;
+	ngal = P_tot;
+}
+
+
 
 void FieldData::average2fields (FieldData &f1, FieldData &f2){
 	ngal = f1.get_ngal();

@@ -22,6 +22,9 @@ typedef struct myhalo{
 	float mass;
 	float radius;
 	float pos[3];
+#if ZSPACE
+	float vel[3];
+#endif
 	int cell;
 	bool subhalo_flag;
 #ifdef DQ1
@@ -784,6 +787,7 @@ void load_halo_full_vmaxthreshold(std::string FileBase, int snapnum, std::vector
 
 	unsigned long long int addr(0);
 	i=0;
+	/*
 	while(1){
 		buf = FileBase + "/halo_catalog/S" + itos3(snapnum) + "_profile."+ itos(i);
 		fin.open(buf.c_str());
@@ -797,6 +801,7 @@ void load_halo_full_vmaxthreshold(std::string FileBase, int snapnum, std::vector
 		i++;
 	}
 	std::cerr << " Profile files read.";
+	*/
 
 	addr = 0;
 	i=0;
@@ -848,9 +853,9 @@ void load_halo_full_vmaxthreshold(std::string FileBase, int snapnum, std::vector
 			hoststr[n].vel[j] = vel[3*n+j];
 		}
 #endif
-		for(int i=0;i<n_profbins;i++){
-			hoststr[n].prof[i] = prof[(unsigned long long int)n_profbins*n+i];
-		}
+		// for(int i=0;i<n_profbins;i++){
+		// 	hoststr[n].prof[i] = prof[(unsigned long long int)n_profbins*n+i];
+		// }
 	}
 	omptl::sort(hoststr.begin(), hoststr.end(), std::greater<>());
 

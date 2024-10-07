@@ -16,8 +16,6 @@
 #include "param.hpp"
 #include "filenames.hpp"
 
-#define ZSPACE // flag for analyses in redshift space
-
 int main(int argc, char **argv){
     std::string FileBase = argv[1];
     int snapnum(atoi(argv[2]));
@@ -98,11 +96,14 @@ int main(int argc, char **argv){
             halos[i].mass = halos_full[i].mass;
             for(int j=0;j<3;j++){
                     halos[i].pos[j] = halos_full[i].pos[j];
+                    halos[i].vel[j] = halos_full[i].vel[j];
             }
     }
 
+    double sfac(get_sfac(redshift,FileBase+"/"+trans_dir+"/"+expansion_file));
+
     FieldData halo_overdensity(ng,Box,false);
-    halo_overdensity.assignment(halos,false,false);
+    halo_overdensity.assignment(halos,false,false,sfac,2);
     halo_overdensity.do_fft();
 
     // Monopole moment
